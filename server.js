@@ -9,7 +9,7 @@ app.use(express.json());
 // 🔑 إعدادات GitHub من متغيرات البيئة
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
-const REPO_NAME = process.env.REPO_NAME || 'auth-database'; // اسم المستودع
+const REPO_NAME = process.env.REPO_NAME || 'Team_manga'; // اسم المستودع
 const FILE_PATH = process.env.FILE_PATH || 'users.json';
 
 // 🔗 روابط GitHub API
