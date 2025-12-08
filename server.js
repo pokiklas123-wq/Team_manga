@@ -9,7 +9,7 @@ app.use(express.json());
 // 🔑 إعدادات GitHub من متغيرات البيئة
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
-const REPO_NAME = 'Team_manga';
+const REPO_NAME = process.env.REPO_NAME || 'Team_manga_railway'; // يمكن تغييره
 const FILE_PATH = 'users.json';
 
 // 🔗 روابط GitHub API
@@ -35,9 +35,6 @@ function hashPassword(password) {
 // 📥 قراءة ملف users.json من GitHub
 async function readUsersFromGitHub() {
     try {
-        console.log('📥 جاري قراءة الملف من GitHub...');
-        console.log('🔗 الرابط:', FILE_URL);
-        
         const response = await axios.get(FILE_URL, {
             headers: {
                 'Authorization': `token ${GITHUB_TOKEN}`,
@@ -45,30 +42,22 @@ async function readUsersFromGitHub() {
             }
         });
         
-        console.log('✅ قراءة ناجحة - حالة HTTP:', response.status);
         const content = Buffer.from(response.data.content, 'base64').toString('utf8');
         return JSON.parse(content);
         
     } catch (error) {
-        console.error('❌ خطأ في القراءة:', error.response?.status || error.code);
-        console.error('📋 تفاصيل الخطأ:', error.response?.data || error.message);
-        
         if (error.response && error.response.status === 404) {
-            console.log('📄 الملف غير موجود، سيتم إنشاؤه عند أول حفظ');
+            // الملف غير موجود، نرجع بيانات فارغة
             return { users: {} };
         }
-        
-        throw error; // رمي الخطأ للتعامل معه في المستوى الأعلى
+        console.error('❌ خطأ في قراءة الملف:', error.message);
+        throw error;
     }
 }
 
 // 💾 كتابة ملف users.json إلى GitHub
 async function writeUsersToGitHub(data) {
     try {
-        console.log('💾 جاري حفظ البيانات إلى GitHub...');
-        console.log('🔗 الرابط:', FILE_URL);
-        console.log('📊 عدد المستخدمين:', Object.keys(data.users).length);
-        
         // الحصول على SHA الحالي للملف
         let currentSHA = null;
         try {
@@ -79,22 +68,17 @@ async function writeUsersToGitHub(data) {
                 }
             });
             currentSHA = currentFile.data.sha;
-            console.log('🔑 SHA الحالي:', currentSHA.substring(0, 20) + '...');
         } catch (error) {
-            if (error.response && error.response.status === 404) {
-                console.log('📄 الملف غير موجود، سيتم إنشاؤه لأول مرة');
-            } else {
-                console.error('❌ خطأ في جلب SHA:', error.message);
+            // إذا الملف غير موجود، هذا طبيعي
+            if (error.response && error.response.status !== 404) {
                 throw error;
             }
         }
         
         const content = JSON.stringify(data, null, 2);
-        console.log('📝 محتوى الملف:', content.substring(0, 200) + '...');
-        
         const contentBase64 = Buffer.from(content).toString('base64');
         
-        const response = await axios.put(FILE_URL, {
+        await axios.put(FILE_URL, {
             message: `تحديث المستخدمين - ${new Date().toISOString()}`,
             content: contentBase64,
             sha: currentSHA || undefined
@@ -106,15 +90,11 @@ async function writeUsersToGitHub(data) {
             }
         });
         
-        console.log('✅ حفظ ناجح - حالة HTTP:', response.status);
-        console.log('🔗 رابط الملف:', response.data.content.html_url);
+        console.log('✅ تم حفظ البيانات إلى GitHub');
         return true;
         
     } catch (error) {
-        console.error('❌ خطأ فادح في الحفظ!');
-        console.error('📊 حالة HTTP:', error.response?.status);
-        console.error('📝 رسالة الخطأ:', error.response?.data?.message || error.message);
-        console.error('🔍 تفاصيل:', error.response?.data || 'لا توجد تفاصيل');
+        console.error('❌ خطأ في حفظ الملف:', error.message);
         throw error;
     }
 }
@@ -124,12 +104,13 @@ async function writeUsersToGitHub(data) {
 // 🏠 الصفحة الرئيسية البسيطة
 app.get('/', (req, res) => {
     res.json({
-        message: 'سيرفر المصادقة',
+        message: 'سيرفر المصادقة على Railway',
         endpoints: {
             create: 'POST /create/:email/:password',
             signin: 'POST /signin/:email/:password',
             test: 'GET /test',
-            debug: 'GET /debug'
+            users: 'GET /users',
+            delete_user: 'DELETE /user/:uid'
         }
     });
 });
@@ -137,9 +118,7 @@ app.get('/', (req, res) => {
 // 🔍 اختبار الاتصال بـ GitHub
 app.get('/test', async (req, res) => {
     try {
-        console.log('🔍 اختبار الاتصال...');
-        
-        // التحقق من المتغيرات البيئية
+        // التحقق من وجود المتغيرات البيئية
         if (!GITHUB_TOKEN) {
             return res.json({
                 success: false,
@@ -170,37 +149,7 @@ app.get('/test', async (req, res) => {
         res.json({
             success: false,
             message: '❌ فشل الاتصال',
-            error: error.response?.data?.message || error.message,
-            status: error.response?.status
-        });
-    }
-});
-
-// 🐛 صفحة تتبع الأخطاء
-app.get('/debug', async (req, res) => {
-    try {
-        // محاولة قراءة الملف
-        const data = await readUsersFromGitHub();
-        
-        res.json({
-            success: true,
-            debug_info: {
-                has_token: !!GITHUB_TOKEN,
-                token_length: GITHUB_TOKEN?.length || 0,
-                has_username: !!GITHUB_USERNAME,
-                username: GITHUB_USERNAME,
-                repo: REPO_NAME,
-                file_url: FILE_URL,
-                users_count: Object.keys(data.users).length,
-                server_time: new Date().toISOString()
-            }
-        });
-        
-    } catch (error) {
-        res.json({
-            success: false,
-            error: error.message,
-            stack: error.stack
+            error: error.response?.data?.message || error.message
         });
     }
 });
@@ -208,36 +157,27 @@ app.get('/debug', async (req, res) => {
 // 👤 إنشاء حساب جديد عبر URL
 app.post('/create/:email/:password', async (req, res) => {
     try {
-        console.log('🚀 بدء إنشاء حساب...');
-        
         const email = decodeURIComponent(req.params.email);
         const password = req.params.password;
-        
-        console.log('📧 البريد:', email);
-        console.log('🔑 كلمة السر:', password);
         
         // التحقق من صحة البريد
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            console.log('❌ بريد غير صالح:', email);
             return res.json({
                 success: false,
-                message: 'صيغة البريد غير صحيحة'
+                message: 'صيغة البريد الإلكتروني غير صحيحة'
             });
         }
         
-        // قراءة البيانات
-        console.log('📥 جاري قراءة قاعدة البيانات...');
+        // قراءة البيانات الحالية
         const db = await readUsersFromGitHub();
-        console.log('📊 عدد المستخدمين الحالي:', Object.keys(db.users).length);
         
-        // التحقق من وجود البريد
+        // التحقق إذا كان البريد مستخدماً
         for (const uid in db.users) {
             if (db.users[uid].email === email) {
-                console.log('❌ البريد مستخدم بالفعل:', email);
                 return res.json({
                     success: false,
-                    message: 'الحساب موجود بالفعل'
+                    message: 'الحساب مستعمل بالفعل'
                 });
             }
         }
@@ -246,10 +186,7 @@ app.post('/create/:email/:password', async (req, res) => {
         const uid = generateUID();
         const hashedPassword = hashPassword(password);
         
-        console.log('🆔 UID الجديد:', uid);
-        console.log('🔐 كلمة السر المشفرة:', hashedPassword);
-        
-        // إضافة المستخدم
+        // إضافة المستخدم الجديد
         db.users[uid] = {
             email: email,
             password: hashedPassword,
@@ -259,15 +196,12 @@ app.post('/create/:email/:password', async (req, res) => {
             last_login: null
         };
         
-        // حفظ البيانات
-        console.log('💾 جاري حفظ البيانات الجديدة...');
+        // حفظ البيانات إلى GitHub
         await writeUsersToGitHub(db);
-        
-        console.log('✅ تم إنشاء الحساب بنجاح!');
         
         res.json({
             success: true,
-            message: 'تم إنشاء الحساب',
+            message: 'تم إنشاء الحساب بنجاح',
             user: {
                 uid: uid,
                 email: email,
@@ -278,15 +212,10 @@ app.post('/create/:email/:password', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('💥 خطأ فادح في إنشاء الحساب!');
-        console.error('📋 الخطأ:', error.message);
-        console.error('🔍 التفاصيل:', error.response?.data || 'لا توجد تفاصيل');
-        
+        console.error('❌ خطأ في إنشاء حساب:', error.message);
         res.status(500).json({
             success: false,
-            message: 'خطأ في السيرفر',
-            error: error.message,
-            details: process.env.NODE_ENV === 'development' ? error.response?.data : undefined
+            message: 'خطأ في السيرفر'
         });
     }
 });
@@ -296,8 +225,6 @@ app.post('/signin/:email/:password', async (req, res) => {
     try {
         const email = decodeURIComponent(req.params.email);
         const password = req.params.password;
-        
-        console.log('🔑 محاولة تسجيل دخول:', email);
         
         // قراءة البيانات
         const db = await readUsersFromGitHub();
@@ -316,7 +243,6 @@ app.post('/signin/:email/:password', async (req, res) => {
         
         // إذا لم يتم العثور على الحساب
         if (!userFound) {
-            console.log('❌ الحساب غير موجود:', email);
             return res.json({
                 success: false,
                 message: 'الحساب غير موجود'
@@ -326,7 +252,6 @@ app.post('/signin/:email/:password', async (req, res) => {
         // التحقق من كلمة المرور
         const hashedInput = hashPassword(password);
         if (userFound.password !== hashedInput) {
-            console.log('❌ كلمة سر خاطئة للحساب:', email);
             return res.json({
                 success: false,
                 message: 'كلمة السر خاطئة'
@@ -338,11 +263,9 @@ app.post('/signin/:email/:password', async (req, res) => {
         db.users[userUID] = userFound;
         await writeUsersToGitHub(db);
         
-        console.log('✅ تسجيل دخول ناجح:', userUID);
-        
         res.json({
             success: true,
-            message: 'تم تسجيل الدخول',
+            message: 'تم تسجيل الدخول بنجاح',
             user: {
                 uid: userUID,
                 email: userFound.email,
@@ -354,32 +277,69 @@ app.post('/signin/:email/:password', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('💥 خطأ في تسجيل الدخول:', error.message);
+        console.error('❌ خطأ في تسجيل الدخول:', error.message);
         res.status(500).json({
             success: false,
-            message: 'خطأ في السيرفر',
-            error: error.message
+            message: 'خطأ في السيرفر'
         });
     }
 });
 
-// 👥 الحصول على جميع المستخدمين
+// 📊 الحصول على جميع المستخدمين
 app.get('/users', async (req, res) => {
     try {
         const db = await readUsersFromGitHub();
-        const count = Object.keys(db.users).length;
+        
+        // إخفاء كلمات المرور عند العرض
+        const usersWithoutPasswords = {};
+        for (const uid in db.users) {
+            usersWithoutPasswords[uid] = {
+                email: db.users[uid].email,
+                uid: db.users[uid].uid,
+                created_at: db.users[uid].created_at,
+                last_login: db.users[uid].last_login
+            };
+        }
         
         res.json({
             success: true,
-            count: count,
-            users: db.users
+            count: Object.keys(db.users).length,
+            users: usersWithoutPasswords
         });
         
     } catch (error) {
-        console.error('❌ خطأ في قراءة المستخدمين:', error.message);
         res.status(500).json({
             success: false,
             message: 'خطأ في قراءة البيانات'
+        });
+    }
+});
+
+// ❌ حذف مستخدم
+app.delete('/user/:uid', async (req, res) => {
+    try {
+        const uid = req.params.uid;
+        const db = await readUsersFromGitHub();
+        
+        if (db.users[uid]) {
+            delete db.users[uid];
+            await writeUsersToGitHub(db);
+            
+            res.json({
+                success: true,
+                message: 'تم حذف المستخدم بنجاح'
+            });
+        } else {
+            res.json({
+                success: false,
+                message: 'المستخدم غير موجود'
+            });
+        }
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'خطأ في الحذف'
         });
     }
 });
@@ -388,9 +348,7 @@ app.get('/users', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ السيرفر يعمل على البورت ${PORT}`);
-    console.log(`👤 GITHUB_USERNAME: ${GITHUB_USERNAME || 'غير محدد'}`);
-    console.log(`🔑 GITHUB_TOKEN: ${GITHUB_TOKEN ? 'موجود (' + GITHUB_TOKEN.length + ' حرف)' : 'مفقود'}`);
-    console.log(`📁 REPO: ${REPO_NAME}`);
-    console.log(`🔗 اختبار الاتصال: http://localhost:${PORT}/test`);
-    console.log(`🐛 صفحة التصحيح: http://localhost:${PORT}/debug`);
+    console.log(`📁 المستودع: ${GITHUB_USERNAME}/${REPO_NAME}`);
+    console.log(`🔗 مثال إنشاء حساب: POST /create/test@test.com/123456`);
+    console.log(`🔗 مثال تسجيل دخول: POST /signin/test@test.com/123456`);
 });
