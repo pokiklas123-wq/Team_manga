@@ -1,17 +1,17 @@
- const express = require('express');
+const express = require('express');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const app = express();
 
 app.use(express.json());
 
-// 🔥 تهيئة Firebase من متغيرات Railway - التعديل الرئيسي الوحيد
+// 🔥 تهيئة Firebase من متغيرات البيئة (Environment Variables)
 admin.initializeApp({
   credential: admin.credential.cert({
     type: process.env.type,
     project_id: process.env.project_id,
     private_key_id: process.env.private_key_id,
-    private_key: process.env.private_key?.replace(/\\n/g, '\n'), // إصلاح تنسيق السطور الجديدة
+    private_key: process.env.private_key?.replace(/\\n/g, '\n'), // إصلاح تنسيق الأسطر الجديدة
     client_email: process.env.client_email,
     client_id: process.env.client_id,
     auth_uri: process.env.auth_uri,
