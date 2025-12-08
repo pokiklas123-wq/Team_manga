@@ -5,12 +5,12 @@ const app = express();
 
 app.use(express.json());
 
-// 🔥 تهيئة Firebase من متغيرات البيئة
+// 🔥 تهيئة Firebase من متغيرات البيئة - الإصدار المصحح
 admin.initializeApp({
   credential: admin.credential.cert({
     type: process.env.type,
     project_id: process.env.project_id,
-    private_key_id: req.env.private_key_id,
+    private_key_id: process.env.private_key_id, // ✅ تم التصحيح هنا
     private_key: process.env.private_key?.replace(/\\n/g, '\n'),
     client_email: process.env.client_email,
     client_id: process.env.client_id,
@@ -21,7 +21,6 @@ admin.initializeApp({
     universe_domain: process.env.universe_domain
   })
 });
-
 const db = admin.firestore();
 
 // ========== الدوال المساعدة (Helper Functions) ==========
