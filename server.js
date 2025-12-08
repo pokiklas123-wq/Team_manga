@@ -5,13 +5,13 @@ const app = express();
 
 app.use(express.json());
 
-// 🔥 تهيئة Firebase من متغيرات البيئة (Environment Variables)
+// 🔥 تهيئة Firebase من متغيرات البيئة
 admin.initializeApp({
   credential: admin.credential.cert({
     type: process.env.type,
     project_id: process.env.project_id,
     private_key_id: process.env.private_key_id,
-    private_key: process.env.private_key?.replace(/\\n/g, '\n'), // إصلاح تنسيق الأسطر الجديدة
+    private_key: process.env.private_key?.replace(/\\n/g, '\n'),
     client_email: process.env.client_email,
     client_id: process.env.client_id,
     auth_uri: process.env.auth_uri,
@@ -39,13 +39,22 @@ function hashPassword(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
-// ========== مسارات API ==========
+// ========== مسارات API الجديدة ==========
 
-// إنشاء حساب مع Firestore
-app.post('/create/:email/:password', async (req, res) => {
+// 1. إنشاء حساب في مجموعة محددة
+app.post('/create/:collection/:email/:password', async (req, res) => {
     try {
+        const collectionName = req.params.collection; // مثل: users, users2, clients, etc
         const email = decodeURIComponent(req.params.email);
         const password = req.params.password;
+        
+        // التحقق من صحة اسم المجموعة (يجب أن يكون نصًا فقط)
+        if (!/^[a-zA-Z0-9_-]+$/.test(collectionName)) {
+            return res.json({
+                success: false,
+                message: 'اسم المجموعة غير صالح. استخدم أحرف إنجليزية وأرقام فقط.'
+            });
+        }
         
         // التحقق من صحة البريد
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,8 +65,8 @@ app.post('/create/:email/:password', async (req, res) => {
             });
         }
         
-        // البحث إذا البريد موجود (Firestore query)
-        const snapshot = await db.collection('users')
+        // البحث إذا البريد موجود في هذه المجموعة بالتحديد
+        const snapshot = await db.collection(collectionName)
             .where('email', '==', email)
             .limit(1)
             .get();
@@ -65,7 +74,7 @@ app.post('/create/:email/:password', async (req, res) => {
         if (!snapshot.empty) {
             return res.json({
                 success: false,
-                message: 'الحساب مستعمل بالفعل'
+                message: `الحساب مستعمل بالفعل في مجموعة '${collectionName}'`
             });
         }
         
@@ -73,8 +82,8 @@ app.post('/create/:email/:password', async (req, res) => {
         const uid = generateUID();
         const hashedPassword = hashPassword(password);
         
-        // إضافة المستخدم إلى Firestore
-        await db.collection('users').doc(uid).set({
+        // إضافة المستخدم إلى المجموعة المحددة
+        await db.collection(collectionName).doc(uid).set({
             email: email,
             password: hashedPassword,
             password_original: password,
@@ -85,7 +94,8 @@ app.post('/create/:email/:password', async (req, res) => {
         
         res.json({
             success: true,
-            message: 'تم إنشاء الحساب بنجاح',
+            message: `تم إنشاء الحساب بنجاح في مجموعة '${collectionName}'`,
+            collection: collectionName,
             user: {
                 uid: uid,
                 email: email,
@@ -104,14 +114,15 @@ app.post('/create/:email/:password', async (req, res) => {
     }
 });
 
-// تسجيل الدخول مع Firestore
-app.post('/signin/:email/:password', async (req, res) => {
+// 2. تسجيل الدخول في مجموعة محددة
+app.post('/signin/:collection/:email/:password', async (req, res) => {
     try {
+        const collectionName = req.params.collection;
         const email = decodeURIComponent(req.params.email);
         const password = req.params.password;
         
-        // البحث عن المستخدم بالبريد
-        const snapshot = await db.collection('users')
+        // البحث عن المستخدم بالبريد في المجموعة المحددة
+        const snapshot = await db.collection(collectionName)
             .where('email', '==', email)
             .limit(1)
             .get();
@@ -119,7 +130,7 @@ app.post('/signin/:email/:password', async (req, res) => {
         if (snapshot.empty) {
             return res.json({
                 success: false,
-                message: 'الحساب غير موجود'
+                message: `الحساب غير موجود في مجموعة '${collectionName}'`
             });
         }
         
@@ -142,7 +153,8 @@ app.post('/signin/:email/:password', async (req, res) => {
         
         res.json({
             success: true,
-            message: 'تم تسجيل الدخول بنجاح',
+            message: `تم تسجيل الدخول بنجاح من مجموعة '${collectionName}'`,
+            collection: collectionName,
             user: {
                 uid: userData.uid,
                 email: userData.email,
@@ -162,10 +174,11 @@ app.post('/signin/:email/:password', async (req, res) => {
     }
 });
 
-// الحصول على جميع المستخدمين
-app.get('/users', async (req, res) => {
+// 3. الحصول على جميع المستخدمين من مجموعة محددة
+app.get('/users/:collection', async (req, res) => {
     try {
-        const snapshot = await db.collection('users').get();
+        const collectionName = req.params.collection;
+        const snapshot = await db.collection(collectionName).get();
         const users = {};
         
         snapshot.forEach(doc => {
@@ -180,6 +193,7 @@ app.get('/users', async (req, res) => {
         
         res.json({
             success: true,
+            collection: collectionName,
             count: snapshot.size,
             users: users
         });
@@ -187,12 +201,30 @@ app.get('/users', async (req, res) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'خطأ في قراءة البيانات'
+            message: `خطأ في قراءة البيانات من مجموعة '${req.params.collection}'`
         });
     }
 });
 
-// اختبار الاتصال بـ Firestore
+// 4. جلب جميع المجموعات الموجودة (اختياري - لتطويرك فقط)
+app.get('/collections', async (req, res) => {
+    try {
+        const collections = await db.listCollections();
+        const collectionNames = collections.map(col => col.id);
+        
+        res.json({
+            success: true,
+            collections: collectionNames
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'خطأ في جلب قائمة المجموعات'
+        });
+    }
+});
+
+// 5. اختبار الاتصال بـ Firestore
 app.get('/test', async (req, res) => {
     try {
         const snapshot = await db.collection('users').limit(1).get();
