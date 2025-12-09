@@ -1,30 +1,10 @@
-// server_up.js - خدمة الإستيقاظ المتبادل
+// server_up.js - خدمة الإستيقاظ المتبادل (مبسطة)
 const express = require('express');
 const axios = require('axios');
 const cron = require('node-cron');
-const admin = require('firebase-admin');
 
 const app = express();
 app.use(express.json());
-
-// 🔥 تهيئة Firebase (نفس إعدادات الخادم الرئيسي)
-admin.initializeApp({
-  credential: admin.credential.cert({
-    type: process.env.type,
-    project_id: process.env.project_id,
-    private_key_id: process.env.private_key_id,
-    private_key: process.env.private_key?.replace(/\\n/g, '\n'),
-    client_email: process.env.client_email,
-    client_id: process.env.client_id,
-    auth_uri: process.env.auth_uri,
-    token_uri: process.env.token_uri,
-    auth_provider_x509_cert_url: process.env.auth_provider_x509_cert_url,
-    client_x509_cert_url: process.env.client_x509_cert_url,
-    universe_domain: process.env.universe_domain
-  })
-});
-
-const db = admin.firestore();
 
 // 🌐 رابط السيرفر الرئيسي من متغير البيئة
 const MAIN_SERVER_URL = process.env.URL_UP || 'https://team-manga.onrender.com';
@@ -32,17 +12,17 @@ const MAIN_SERVER_URL = process.env.URL_UP || 'https://team-manga.onrender.com';
 // 🔄 دالة لإيقاظ السيرفر الرئيسي
 async function wakeUpMainServer() {
   try {
-    console.log(`⏰ محاولة إيقاظ السيرفر الرئيسي: ${MAIN_SERVER_URL}/wake`);
+    console.log(`⏰ [${new Date().toLocaleTimeString()}] إيقاظ السيرفر: ${MAIN_SERVER_URL}/wake`);
     
     const response = await axios.get(`${MAIN_SERVER_URL}/wake`, {
-      timeout: 30000 // 30 ثانية كحد أقصى
+      timeout: 10000 // 10 ثواني فقط
     });
     
-    console.log(`✅ تم إيقاظ السيرفر الرئيسي: ${response.data.message}`);
-    return true;
+    console.log(`✅ [${new Date().toLocaleTimeString()}] تم بنجاح: ${response.data.message}`);
+    return { success: true, data: response.data };
   } catch (error) {
-    console.error('❌ فشل في إيقاظ السيرفر الرئيسي:', error.message);
-    return false;
+    console.error(`❌ [${new Date().toLocaleTimeString()}] فشل: ${error.message}`);
+    return { success: false, error: error.message };
   }
 }
 
@@ -50,50 +30,79 @@ async function wakeUpMainServer() {
 app.get('/wake', async (req, res) => {
   try {
     const wakeTime = new Date().toISOString();
-    console.log(`🔔 تم استدعاء خدمة الإيقاظ في: ${wakeTime}`);
+    console.log(`🔔 [${new Date().toLocaleTimeString()}] تم استدعائي من السيرفر الرئيسي`);
     
     res.json({
       success: true,
-      message: `تم إيقاظ خدمة الإستيقاظ في ${wakeTime}`,
-      server: 'team-manga-rebo',
-      woke_at: wakeTime
+      message: `تم إيقاظ خدمة الإستيقاظ في ${new Date().toLocaleTimeString('ar-SA')}`,
+      server: 'team-manga-rebo (خدمة الإيقاظ)',
+      woke_at: wakeTime,
+      next_wake: 'بعد 5 دقائق'
     });
   } catch (error) {
     res.status(500).json({ 
       success: false, 
-      message: 'خطأ في خدمة الإيقاظ' 
+      message: 'خطأ في خدمة الإيقاظ',
+      error: error.message 
     });
   }
 });
 
-// 🧪 اختبار الاتصال
+// 🧪 اختبار الاتصال البسيط
 app.get('/test', async (req, res) => {
   res.json({
     success: true,
     message: '✅ خدمة الإستيقاظ تعمل!',
-    system: 'Wake-Up Service',
-    main_server_url: MAIN_SERVER_URL,
-    time: new Date().toISOString()
+    system: 'Wake-Up Service Only',
+    target_server: MAIN_SERVER_URL,
+    time: new Date().toISOString(),
+    local_time: new Date().toLocaleTimeString('ar-SA')
   });
 });
 
+// 📍 الصفحة الرئيسية البسيطة
+app.get('/', async (req, res) => {
+  res.send(`
+    <html dir="rtl">
+    <head>
+        <title>خدمة إيقاظ السيرفر</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            h1 { color: #2c3e50; }
+            .status { background: #3498db; color: white; padding: 10px 20px; border-radius: 5px; display: inline-block; }
+            .info { margin: 20px 0; }
+        </style>
+    </head>
+    <body>
+        <h1>🔔 خدمة إيقاظ السيرفر</h1>
+        <div class="status">✅ الحالة: نشطة</div>
+        <div class="info">
+            <p>⏰ الوقت: ${new Date().toLocaleTimeString('ar-SA')}</p>
+            <p>🎯 السيرفر المستهدف: ${MAIN_SERVER_URL}</p>
+            <p>⏱️ الإيقاظ كل: 5 دقائق</p>
+        </div>
+        <p><a href="/test">اختبار الخدمة</a></p>
+    </body>
+    </html>
+  `);
+});
+
 // 📅 جدولة إيقاظ السيرفر الرئيسي كل 5 دقائق
-// ستشتغل فقط إذا كانت الخدمة نشطة
 cron.schedule('*/5 * * * *', async () => {
-  console.log('⏰ تشغيل المهمة المجدولة لإيقاظ السيرفر الرئيسي...');
+  console.log(`⏰ [${new Date().toLocaleTimeString()}] بدأت المهمة المجدولة`);
   await wakeUpMainServer();
 });
 
-// 🚀 تشغيل السيرفر مع جدولة فورية عند التشغيل
+// 🚀 تشغيل السيرفر مع بدء فوري للإيقاظ
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, async () => {
   console.log(`✅ خدمة الإستيقاظ تعمل على البورت ${PORT}`);
-  console.log(`🔗 السيرفر الرئيسي المستهدف: ${MAIN_SERVER_URL}`);
+  console.log(`🎯 السيرفر المستهدف: ${MAIN_SERVER_URL}`);
   
-  // إيقاظ السيرفر الرئيسي فوراً عند تشغيل هذه الخدمة
-  console.log('🔔 محاولة الإيقاظ الفوري للسيرفر الرئيسي...');
-  await wakeUpMainServer();
-  
-  // بدأ الجدولة
-  console.log('⏰ تم تفعيل الجدولة لإيقاظ السيرفر كل 5 دقائق');
+  // بدأ الإيقاظ فوراً بعد 5 ثواني
+  setTimeout(async () => {
+    console.log('🔔 بدء الإيقاظ الأولي بعد التشغيل...');
+    await wakeUpMainServer();
+    console.log('⏰ تم تفعيل الجدولة لإيقاظ السيرفر كل 5 دقائق');
+  }, 5000);
 });
