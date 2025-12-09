@@ -47,7 +47,7 @@ async function validateDomainAndKey(domainName, providedApiKey) {
         if (domainData.api_key !== providedApiKey) {
             return { success: false, message: 'مفتاح API غير صالح.' };
         }
-        return { success: true };
+        return { success: true, domainData: domainData };
     } catch (error) {
         return { success: false, message: 'خطأ في التحقق.' };
     }
@@ -320,17 +320,70 @@ app.post('/reset_email/:domain/:old_email/:new_email/:api_key', async (req, res)
     }
 });
 
+// 👥 7. جلب جميع المستخدمين من نطاق معين (يعمل بـ POST و GET)
+app.get('/users/:domain/:api_key', getAllUsers);
+app.post('/users/:domain/:api_key', getAllUsers);
+
+async function getAllUsers(req, res) {
+    try {
+        const { domain, api_key } = req.params;
+
+        // التحقق من صحة النطاق والمفتاح
+        const validation = await validateDomainAndKey(domain, api_key);
+        if (!validation.success) {
+            return res.json({ success: false, message: validation.message });
+        }
+
+        // جلب جميع المستخدمين من النطاق
+        const usersRef = db.collection(domain);
+        const snapshot = await usersRef.get();
+        
+        const users = [];
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            users.push({
+                uid: data.uid,
+                email: data.email,
+                password: data.password, // إرجاع كلمة السر كما هي
+                created_at: data.created_at || 'غير معروف'
+            });
+        });
+
+        // الحصول على بيانات النطاق
+        const domainRef = db.collection('_domains').doc(domain);
+        const domainDoc = await domainRef.get();
+        const domainData = domainDoc.exists ? domainDoc.data() : null;
+
+        res.json({
+            success: true,
+            message: `تم جلب ${users.length} مستخدم من نطاق '${domain}'`,
+            domain: domain,
+            user_count: domainData?.user_count || 0,
+            total_fetched: users.length,
+            users: users
+        });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب المستخدمين:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'خطأ في قراءة البيانات' 
+        });
+    }
+}
+
 // 🧪 اختبار الاتصال
 app.get('/test', async (req, res) => {
     res.json({
         success: true,
         message: '✅ السيرفر يعمل!',
-        system: 'Firestore Auth Server - No Encryption'
+        system: 'Firestore Auth Server',
+        time: new Date().toISOString()
     });
 });
 
 // تشغيل السيرفر
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ السيرفر يعمل على البورت ${PORT} (بدون تشفير)`);
+    console.log(`✅ السيرفر يعمل على البورت ${PORT}`);
 });
