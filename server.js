@@ -1,9 +1,7 @@
-// server.js - السيرفر الرئيسي مع نظام الإيقاظ المتبادل
+// server.js - السيرفر الرئيسي بعد إزالة نظام الإيقاظ
 const express = require('express');
 const admin = require('firebase-admin');
-const axios = require('axios');
-const cron = require('node-cron');
-
+// تمت إزالة مكتبات axios و node-cron (لم تعد مستخدمة)
 const app = express();
 app.use(express.json());
 
@@ -25,63 +23,6 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-
-// ========== إعدادات نظام الإيقاظ المتبادل ==========
-
-// 🌐 رابط خدمة الإستيقاظ من متغير البيئة
-const WAKE_SERVICE_URL = process.env.URL_UP || 'https://team-manga-rebo.onrender.com';
-
-// 🔄 دالة لإيقاظ خدمة الإستيقاظ
-async function wakeUpService() {
-  try {
-    console.log(`⏰ [${new Date().toLocaleTimeString()}] محاولة إيقاظ خدمة الإستيقاظ: ${WAKE_SERVICE_URL}/wake`);
-    
-    const response = await axios.get(`${WAKE_SERVICE_URL}/wake`, {
-      timeout: 15000 // 15 ثانية فقط لتجنب الانتظار الطويل
-    });
-    
-    console.log(`✅ [${new Date().toLocaleTimeString()}] تم إيقاظ خدمة الإستيقاظ: ${response.data.message}`);
-    return { success: true, data: response.data };
-  } catch (error) {
-    console.error(`❌ [${new Date().toLocaleTimeString()}] فشل في إيقاظ خدمة الإستيقاظ:`, error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-// 🛌 نقطة نهاية للاستيقاظ (ليستدعيك خدمة الإيقاظ)
-app.get('/wake', async (req, res) => {
-  try {
-    const wakeTime = new Date().toISOString();
-    console.log(`🔔 [${new Date().toLocaleTimeString()}] تم استدعاء نقطة الإيقاظ من خدمة الإستيقاظ`);
-    
-    res.json({
-      success: true,
-      message: `تم إيقاظ السيرفر الرئيسي في ${new Date().toLocaleTimeString('ar-SA')}`,
-      server: 'team-manga',
-      woke_at: wakeTime,
-      next_wake: 'بعد 5 دقائق',
-      note: 'سيتم إيقاظ خدمة الإستيقاظ في الدقيقة القادمة'
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'خطأ في نقطة الإيقاظ',
-      error: error.message 
-    });
-  }
-});
-
-// 📅 جدولة إيقاظ خدمة الإستيقاظ كل 5 دقائق
-cron.schedule('*/5 * * * *', async () => {
-  console.log(`⏰ [${new Date().toLocaleTimeString()}] تشغيل المهمة المجدولة لإيقاظ خدمة الإستيقاظ...`);
-  await wakeUpService();
-});
-
-// 🔄 بدء جدولة إيقاظ خدمة الإستيقاظ فور تشغيل السيرفر
-setTimeout(async () => {
-  console.log('🔔 بدء الإيقاظ المتبادل الأولي بعد 10 ثواني...');
-  await wakeUpService();
-}, 10000);
 
 // ========== دوال النظام الأساسي ==========
 
@@ -439,8 +380,7 @@ app.get('/test', async (req, res) => {
     res.json({
         success: true,
         message: '✅ السيرفر يعمل!',
-        system: 'Firestore Auth Server مع نظام الإيقاظ المتبادل',
-        wake_service_url: WAKE_SERVICE_URL,
+        system: 'Firestore Auth Server', // تمت إزالة الإشارة إلى نظام الإيقاظ
         time: new Date().toISOString(),
         local_time: new Date().toLocaleTimeString('ar-SA')
     });
@@ -464,8 +404,7 @@ app.get('/', async (req, res) => {
             <div class="status">✅ الحالة: نشط</div>
             <div class="info">
                 <p>⏰ الوقت: ${new Date().toLocaleTimeString('ar-SA')}</p>
-                <p>🔗 نظام الإيقاظ المتبادل: مفعل</p>
-                <p>📞 خدمة الإيقاظ: ${WAKE_SERVICE_URL}</p>
+                <!-- تمت إزالة الإشارة إلى نظام الإيقاظ المتبادل -->
             </div>
             <p><a href="/test">اختبار API</a></p>
         </body>
@@ -477,7 +416,5 @@ app.get('/', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ السيرفر يعمل على البورت ${PORT}`);
-    console.log(`🔗 رابط الإيقاظ المتبادل: ${WAKE_SERVICE_URL}`);
-    console.log(`⏰ تم تفعيل نظام الإيقاظ المتبادل كل 5 دقائق`);
     console.log(`📊 افتح ${process.env.RENDER_EXTERNAL_URL || 'http://localhost:' + PORT} في المتصفح`);
 });
