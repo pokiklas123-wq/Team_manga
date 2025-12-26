@@ -1,16 +1,16 @@
 const express = require('express');
-const { StreamClient } = require('@stream-io/node-sdk');
-//const { StreamChat } = require('stream-chat'); // الحزمة الجديدة
+// تصحيح: استدعاء المكتبة الموجودة في package.json بدلاً من المكتبة المفقودة
+const { StreamChat } = require('stream-chat'); 
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
 
-// 1. إعدادات Stream API (استخدم مفاتيحك هنا أو المتغيرات البيئية)
+// 1. إعدادات Stream API
 const STREAM_API_KEY = process.env.STREAM_API_KEY || 'r9vxmmx42jmz';
 const STREAM_API_SECRET = process.env.STREAM_API_SECRET || 'zzf2rqubuyswebanq2xncfef8uu24b2m7ftq7k85a5szgegvdgmre7n4kngfrjzc';
 
-// 2. تهيئة عميل Stream باستخدام الحزمة الجديدة
+// 2. تهيئة عميل Stream (هذا السطر سيعمل الآن لأننا استدعينا StreamChat بالأعلى)
 const serverClient = StreamChat.getInstance(STREAM_API_KEY, STREAM_API_SECRET);
 
 // 3. إعداد Middleware
@@ -30,7 +30,7 @@ app.get('/api/token', (req, res) => {
             });
         }
         
-        // إنشاء التوكن باستخدام الحزمة الجديدة
+        // إنشاء التوكن
         const token = serverClient.createToken(user_id);
         
         res.json({
@@ -67,5 +67,4 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`✅ الخادم يعمل على المنفذ: ${PORT}`);
-    console.log(`🔗 الرابط: http://localhost:${PORT}`);
 });
