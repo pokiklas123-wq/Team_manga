@@ -1,5 +1,8 @@
 const express = require('express');
-const { StreamClient } = require('@stream-io/node-sdk');
+
+const serverClient = StreamChat.getInstance(STREAM_API_KEY, STREAM_API_SECRET);
+
+//const { StreamClient } = require('@stream-io/node-sdk');
 const cors = require('cors');
 const path = require('path');
 
