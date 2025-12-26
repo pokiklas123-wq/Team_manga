@@ -72,11 +72,19 @@
         </footer>
     </div>
 
-    <!-- مكتبة Stream SDK -->
-    <script src="https://unpkg.com/@stream-io/video-styling/dist/css/styles.css"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@stream-io/video-sdk"></script>
+    <!-- مكتبة Stream SDK الصحيحة -->
+    <script type="importmap">
+        {
+            "imports": {
+                "@stream-io/video-client": "https://cdn.jsdelivr.net/npm/@stream-io/video-client@0.5.0/+esm"
+            }
+        }
+    </script>
 
-    <script>
+    <script type="module">
+        // استيراد مكتبة Stream Video SDK
+        import { StreamVideoClient } from '@stream-io/video-client';
+
         // ==================== تعريف المتغيرات العالمية ====================
         const API_KEY = 'r9vxmmx42jmz';  // مفتاح API الخاص بك
         let streamClient = null;
@@ -157,9 +165,9 @@
                 const { token, api_key } = await tokenResponse.json();
                 logToConsole('✅ تم الحصول على رمز الدخول بنجاح', 'success');
 
-                // 3. تهيئة عميل Stream
+                // 3. تهيئة عميل Stream - التعديل الرئيسي هنا
                 logToConsole('⚙️ جاري تهيئة عميل الفيديو...', 'info');
-                streamClient = new stream.VideoClient(api_key || API_KEY, { 
+                streamClient = new StreamVideoClient(api_key || API_KEY, { 
                     token, 
                     user: { 
                         id: userId,
@@ -372,6 +380,10 @@
                 updateStatus(`فشل إيقاف البث: ${error.message}`, false);
             }
         }
+
+        // جعل الدوال متاحة عالمياً
+        window.startBroadcast = startBroadcast;
+        window.stopBroadcast = stopBroadcast;
 
         // ==================== التهيئة عند تحميل الصفحة ====================
         document.addEventListener('DOMContentLoaded', async () => {
