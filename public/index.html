@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بث مباشر - Stream على Render</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; min-height: 100vh; padding: 20px; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; padding: 30px 0; border-bottom: 2px solid #00adb5; margin-bottom: 30px; }
+        h1 { font-size: 2.5rem; color: #00adb5; margin-bottom: 10px; }
+        .subtitle { color: #a3a3c2; font-size: 1.1rem; }
+        .main-content { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 30px; }
+        .video-section { flex: 1; min-width: 300px; background: rgba(30, 30, 46, 0.8); border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+        .video-section h2 { color: #00d4aa; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #00d4aa; }
+        video { width: 100%; background: #000; border-radius: 10px; margin-bottom: 15px; border: 3px solid #393e46; }
+        .controls { text-align: center; margin-top: 20px; }
+        button { background: linear-gradient(90deg, #00adb5 0%, #0097a7 100%); color: white; border: none; padding: 15px 35px; font-size: 1.1rem; border-radius: 50px; cursor: pointer; margin: 0 10px; transition: all 0.3s; font-weight: bold; box-shadow: 0 5px 15px rgba(0, 173, 181, 0.4); }
+        button:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0, 173, 181, 0.6); background: linear-gradient(90deg, #0097a7 0%, #00838f 100%); }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; box-shadow: none; }
+        #stopBtn { background: linear-gradient(90deg, #ff416c 0%, #ff4b2b 100%); }
+        #stopBtn:hover { background: linear-gradient(90deg, #ff4b2b 0%, #ff416c 100%); }
+        .log-section { background: rgba(30, 30, 46, 0.8); border-radius: 15px; padding: 25px; margin-top: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
+        .log-section h2 { color: #ffd700; margin-bottom: 15px; }
+        #log { background: #0f0f1a; border-radius: 10px; padding: 20px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.95rem; border: 1px solid #393e46; }
+        .log-entry { margin-bottom: 10px; padding: 8px 12px; border-radius: 6px; }
+        .log-info { background: rgba(0, 173, 181, 0.1); border-right: 4px solid #00adb5; }
+        .log-success { background: rgba(0, 200, 83, 0.1); border-right: 4px solid #00c853; }
+        .log-error { background: rgba(255, 65, 108, 0.1); border-right: 4px solid #ff416c; }
+        .status { padding: 15px; border-radius: 10px; margin: 15px 0; text-align: center; font-weight: bold; }
+        .status-online { background: rgba(0, 200, 83, 0.2); color: #00c853; border: 1px solid #00c853; }
+        .status-offline { background: rgba(255, 65, 108, 0.2); color: #ff416c; border: 1px solid #ff416c; }
+        footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #393e46; color: #a3a3c2; font-size: 0.9rem; }
+        @media (max-width: 768px) { h1 { font-size: 2rem; } .main-content { flex-direction: column; } button { padding: 12px 25px; margin: 5px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎥 غرفة البث المباشر</h1>
+            <p class="subtitle">بث مباشر باستخدام Stream.io ونشر على Render</p>
+        </header>
+
+        <div class="status" id="statusIndicator">🔍 جاري التحقق من اتصال الخادم...</div>
+
+        <div class="main-content">
+            <section class="video-section">
+                <h2>📹 الفيديو الخاص بك (المذيع)</h2>
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div class="controls">
+                    <button id="startBtn" onclick="startBroadcast()">▶ بدء البث المباشر</button>
+                    <button id="stopBtn" onclick="stopBroadcast()" disabled>⏹ إيقاف البث</button>
+                </div>
+            </section>
+
+            <section class="video-section">
+                <h2>👥 فيديو المشاهدين</h2>
+                <div id="remoteVideos"></div>
+                <p style="text-align: center; color: #a3a3c2; margin-top: 15px;" id="participantsCount">لا يوجد مشاهدين بعد</p>
+            </section>
+        </div>
+
+        <section class="log-section">
+            <h2>📝 سجل التشغيل</h2>
+            <div id="log"></div>
+        </section>
+
+        <footer>
+            <p>تم التطوير باستخدام Stream Video SDK | مستضاف على Render</p>
+            <p id="serverUrl"></p>
+        </footer>
+    </div>
+
+    <!-- مكتبة Stream SDK -->
+    <script src="https://unpkg.com/@stream-io/video-styling/dist/css/styles.css"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stream-io/video-sdk"></script>
+
+    <script>
+        // ==================== تعريف المتغيرات العالمية ====================
+        const API_KEY = 'r9vxmmx42jmz';  // مفتاح API الخاص بك
+        let streamClient = null;
+        let activeCall = null;
+        let participantsCount = 0;
+
+        // ==================== دوال المساعدة ====================
+        function updateStatus(message, isOnline = true) {
+            const statusEl = document.getElementById('statusIndicator');
+            statusEl.textContent = message;
+            statusEl.className = `status ${isOnline ? 'status-online' : 'status-offline'}`;
+        }
+
+        function logToConsole(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const messageEl = document.createElement('div');
+            
+            messageEl.className = `log-entry log-${type}`;
+            messageEl.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            logDiv.appendChild(messageEl);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[Stream] ${message}`);
+        }
+
+        function updateParticipantsUI() {
+            const countEl = document.getElementById('participantsCount');
+            if (participantsCount === 0) {
+                countEl.textContent = 'لا يوجد مشاهدين بعد';
+            } else {
+                countEl.textContent = `عدد المشاهدين: ${participantsCount}`;
+            }
+        }
+
+        // ==================== الاتصال بالخادم ====================
+        async function checkServerHealth() {
+            try {
+                const baseUrl = window.location.origin;
+                const response = await fetch(`${baseUrl}/health`);
+                if (response.ok) {
+                    updateStatus('✅ الخادم متصل ويعمل بشكل طبيعي', true);
+                    logToConsole('اتصال الخادم ناجح', 'success');
+                    document.getElementById('serverUrl').textContent = `رابط الخادم: ${baseUrl}`;
+                    return true;
+                }
+            } catch (error) {
+                updateStatus('❌ لا يمكن الاتصال بالخادم', false);
+                logToConsole(`فشل الاتصال بالخادم: ${error.message}`, 'error');
+            }
+            return false;
+        }
+
+        // ==================== دالة بدء البث ====================
+        async function startBroadcast() {
+            try {
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                startBtn.disabled = true;
+                startBtn.textContent = 'جاري الإعداد...';
+                logToConsole('--- بدء عملية البث المباشر ---', 'info');
+
+                // 1. إنشاء معرف مستخدم فريد
+                const userId = `broadcaster_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                logToConsole(`🆔 معرف المذيع: ${userId}`, 'info');
+
+                // 2. جلب التوكن من الخادم
+                logToConsole('🔐 جاري طلب رمز الدخول...', 'info');
+                const baseUrl = window.location.origin;
+                const tokenResponse = await fetch(`${baseUrl}/api/token?user_id=${encodeURIComponent(userId)}`);
+                
+                if (!tokenResponse.ok) {
+                    const errorData = await tokenResponse.json().catch(() => ({}));
+                    throw new Error(errorData.error || `فشل طلب التوكن (${tokenResponse.status})`);
+                }
+                
+                const { token, api_key } = await tokenResponse.json();
+                logToConsole('✅ تم الحصول على رمز الدخول بنجاح', 'success');
+
+                // 3. تهيئة عميل Stream
+                logToConsole('⚙️ جاري تهيئة عميل الفيديو...', 'info');
+                streamClient = new stream.VideoClient(api_key || API_KEY, { 
+                    token, 
+                    user: { 
+                        id: userId,
+                        name: 'مذيع البث',
+                        image: `https://ui-avatars.com/api/?name=Broadcaster&background=00adb5&color=fff`
+                    }
+                });
+
+                // 4. الاتصال بالمستخدم
+                logToConsole('🔗 جاري توصيل المستخدم...', 'info');
+                await streamClient.connectUser({ id: userId }, token);
+                logToConsole('✅ تم توصيل المستخدم بنجاح', 'success');
+
+                // 5. الانضمام إلى غرفة البث
+                logToConsole('🚪 جاري الانضمام إلى غرفة البث...', 'info');
+                const callId = `live-room-${Date.now()}`;
+                activeCall = streamClient.call('livestream', callId);
+                
+                await activeCall.join({ 
+                    create: true,
+                    data: {
+                        custom: {
+                            title: 'بث مباشر حي',
+                            description: 'بث مباشر تجريبي من تطبيق Stream على Render',
+                            host: userId
+                        }
+                    }
+                });
+                
+                logToConsole(`✅ انضممت إلى الغرفة: ${callId}`, 'success');
+
+                // 6. تشغيل الكاميرا والميكروفون
+                logToConsole('📹 جاري تشغيل الكاميرا...', 'info');
+                await activeCall.camera.enable();
+                
+                logToConsole('🎤 جاري تشغيل الميكروفون...', 'info');
+                await activeCall.microphone.enable();
+                
+                logToConsole('✅ تم تشغيل الوسائط بنجاح', 'success');
+
+                // 7. عرض الفيديو المحلي
+                const localVideo = document.getElementById('localVideo');
+                await activeCall.camera.setVideoElement(localVideo);
+                
+                logToConsole('🎬 جاري عرض الفيديو المحلي...', 'info');
+
+                // 8. تحديث واجهة التحكم
+                startBtn.textContent = '🔴 تبث الآن';
+                stopBtn.disabled = false;
+                
+                updateStatus('🔴 أنت تبث مباشرة الآن', true);
+                logToConsole('🎉 البث المباشر يعمل بنجاح!', 'success');
+
+                // 9. إعداد مستمعين للمشاهدين
+                setupParticipantListeners();
+
+                // 10. طلب الإذن لتصعيد الجودة (إذا لزم)
+                setTimeout(() => {
+                    if (activeCall) {
+                        activeCall.camera.setTargetResolution({ width: 1280, height: 720 });
+                        logToConsole('🔄 تم طلب دقة فيديو أعلى (720p)', 'info');
+                    }
+                }, 2000);
+
+            } catch (error) {
+                logToConsole(`❌ خطأ في بدء البث: ${error.message}`, 'error');
+                updateStatus(`فشل بدء البث: ${error.message}`, false);
+                
+                const startBtn = document.getElementById('startBtn');
+                startBtn.disabled = false;
+                startBtn.textContent = '▶ بدء البث المباشر';
+                
+                // إعادة تعيين المتغيرات في حالة الفشل
+                if (streamClient) {
+                    try { await streamClient.disconnectUser(); } catch {}
+                    streamClient = null;
+                }
+                activeCall = null;
+            }
+        }
+
+        // ==================== دالة إعداد مستمعين للمشاهدين ====================
+        function setupParticipantListeners() {
+            if (!activeCall) return;
+            
+            // عند انضمام مشاهد جديد
+            activeCall.on('participantJoined', async (participant) => {
+                participantsCount++;
+                updateParticipantsUI();
+                
+                logToConsole(`👤 ${participant.user.name || participant.user.id} انضم إلى البث`, 'info');
+                
+                // إنشاء عنصر فيديو للمشاهد
+                const remoteVideosDiv = document.getElementById('remoteVideos');
+                const videoContainer = document.createElement('div');
+                videoContainer.className = 'participant-video';
+                videoContainer.id = `participant-${participant.sessionId}`;
+                videoContainer.style.cssText = `
+                    position: relative;
+                    display: inline-block;
+                    margin: 10px;
+                    width: 200px;
+                    background: #1e1e2e;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                `;
+                
+                const videoElement = document.createElement('video');
+                videoElement.id = `video-${participant.sessionId}`;
+                videoElement.autoplay = true;
+                videoElement.playsInline = true;
+                videoElement.style.cssText = 'width: 100%; border-radius: 10px;';
+                
+                const nameOverlay = document.createElement('div');
+                nameOverlay.style.cssText = `
+                    position: absolute;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    padding: 5px 10px;
+                    font-size: 0.8rem;
+                    border-bottom-left-radius: 10px;
+                    border-bottom-right-radius: 10px;
+                `;
+                nameOverlay.textContent = participant.user.name || participant.user.id;
+                
+                videoContainer.appendChild(videoElement);
+                videoContainer.appendChild(nameOverlay);
+                remoteVideosDiv.appendChild(videoContainer);
+                
+                // توصيل تدفق الفيديو بالعنصر
+                try {
+                    await participant.setVideoElement(videoElement);
+                    logToConsole(`✅ تم توصيل فيديو ${participant.user.id}`, 'success');
+                } catch (videoError) {
+                    logToConsole(`⚠️ لم يتمكن ${participant.user.id} من مشاركة الفيديو`, 'info');
+                }
+            });
+            
+            // عند مغادرة مشاهد
+            activeCall.on('participantLeft', (participant) => {
+                participantsCount = Math.max(0, participantsCount - 1);
+                updateParticipantsUI();
+                
+                logToConsole(`👤 ${participant.user.name || participant.user.id} غادر البث`, 'info');
+                
+                // إزالة عنصر الفيديو
+                const videoContainer = document.getElementById(`participant-${participant.sessionId}`);
+                if (videoContainer) {
+                    videoContainer.remove();
+                }
+            });
+            
+            // عند تغيير حالة المشارك
+            activeCall.on('participantUpdated', (participant) => {
+                logToConsole(`🔄 ${participant.user.id} قام بتحديث حالته`, 'info');
+            });
+        }
+
+        // ==================== دالة إيقاف البث ====================
+        async function stopBroadcast() {
+            try {
+                logToConsole('⏹ جاري إيقاف البث...', 'info');
+                
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                
+                stopBtn.disabled = true;
+                stopBtn.textContent = 'جاري الإيقاف...';
+                
+                // 1. مغادرة الغرفة
+                if (activeCall) {
+                    await activeCall.leave();
+                    activeCall = null;
+                    logToConsole('✅ غادرت غرفة البث', 'success');
+                }
+                
+                // 2. قطع اتصال المستخدم
+                if (streamClient) {
+                    await streamClient.disconnectUser();
+                    streamClient = null;
+                    logToConsole('✅ تم قطع اتصال المستخدم', 'success');
+                }
+                
+                // 3. إيقاف تدفقات الوسائط المحلية
+                const localVideo = document.getElementById('localVideo');
+                if (localVideo.srcObject) {
+                    localVideo.srcObject.getTracks().forEach(track => track.stop());
+                    localVideo.srcObject = null;
+                }
+                
+                // 4. تنظيف فيديوهات المشاهدين
+                document.getElementById('remoteVideos').innerHTML = '';
+                participantsCount = 0;
+                updateParticipantsUI();
+                
+                // 5. تحديث واجهة التحكم
+                startBtn.disabled = false;
+                startBtn.textContent = '▶ بدء البث المباشر';
+                stopBtn.textContent = '⏹ إيقاف البث';
+                
+                updateStatus('✅ تم إيقاف البث بنجاح', true);
+                logToConsole('🎬 البث متوقف، جاهز للبدء من جديد', 'success');
+                
+            } catch (error) {
+                logToConsole(`❌ خطأ في إيقاف البث: ${error.message}`, 'error');
+                updateStatus(`فشل إيقاف البث: ${error.message}`, false);
+            }
+        }
+
+        // ==================== التهيئة عند تحميل الصفحة ====================
+        document.addEventListener('DOMContentLoaded', async () => {
+            logToConsole('📄 صفحة البث المباشر جاهزة', 'success');
+            logToConsole('ℹ️ اضغط على "بدء البث المباشر" لبدء البث', 'info');
+            
+            // التحقق من صحة الخادم
+            await checkServerHealth();
+            
+            // إضافة مستمع لأخطاء الصفحة العامة
+            window.addEventListener('error', (event) => {
+                logToConsole(`⚠️ خطأ في الصفحة: ${event.message}`, 'error');
+            });
+            
+            // إضافة مستمع لانقطاع الاتصال
+            window.addEventListener('offline', () => {
+                updateStatus('🌐 تم فقدان الاتصال بالإنترنت', false);
+                logToConsole('انقطع الاتصال بالإنترنت', 'error');
+            });
+            
+            window.addEventListener('online', async () => {
+                updateStatus('🔃 إعادة الاتصال...', false);
+                logToConsole('تم استعادة الاتصال بالإنترنت', 'info');
+                await checkServerHealth();
+            });
+        });
+    </script>
+</body>
+</html>
