@@ -1,70 +1,57 @@
 const express = require('express');
-const { StreamChat } = require('stream-chat'); // الحزمة الجديدة
+const { StreamClient } = require('@stream-io/node-sdk'); // المكتبة الصحيحة للفيديو
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
 
-// 1. إعدادات Stream API (استخدم مفاتيحك هنا أو المتغيرات البيئية)
+// 1. إعدادات Stream API
 const STREAM_API_KEY = process.env.STREAM_API_KEY || 'r9vxmmx42jmz';
 const STREAM_API_SECRET = process.env.STREAM_API_SECRET || 'zzf2rqubuyswebanq2xncfef8uu24b2m7ftq7k85a5szgegvdgmre7n4kngfrjzc';
 
-// 2. تهيئة عميل Stream باستخدام الحزمة الجديدة
-const serverClient = StreamChat.getInstance(STREAM_API_KEY, STREAM_API_SECRET);
+// 2. تهيئة عميل Stream باستخدام حزمة Node SDK
+const serverClient = new StreamClient(STREAM_API_KEY, STREAM_API_SECRET);
 
-// 3. إعداد Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // تأكد أن ملف HTML داخل مجلد public
 
-// 4. نقطة النهاية (Endpoint) لإنشاء التوكن
-app.get('/api/token', (req, res) => {
+// 3. نقطة النهاية لإنشاء التوكن
+app.get('/api/token', async (req, res) => {
     try {
         const { user_id } = req.query;
         
         if (!user_id) {
-            return res.status(400).json({ 
-                error: 'معرف المستخدم مطلوب',
-                code: 'USER_ID_REQUIRED'
-            });
+            return res.status(400).json({ error: 'User ID is required' });
         }
-        
-        // إنشاء التوكن باستخدام الحزمة الجديدة
-        const token = serverClient.createToken(user_id);
+
+        // إنشاء المستخدم في Stream لضمان وجوده
+        await serverClient.upsertUsers([
+            {
+                id: user_id,
+                role: 'user', // أو 'admin' للمذيع إذا أردت صلاحيات أكثر
+            },
+        ]);
+
+        // توليد التوكن
+        const token = serverClient.generateUserToken({ user_id });
         
         res.json({
-            success: true,
-            user_id,
             token,
             api_key: STREAM_API_KEY
         });
         
     } catch (error) {
-        console.error('خطأ في إنشاء التوكن:', error);
-        res.status(500).json({ 
-            error: 'فشل إنشاء التوكن',
-            details: error.message 
-        });
+        console.error('Error generating token:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// 5. نقطة النهاية للصحة (Health Check)
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'نشط',
-        timestamp: new Date().toISOString(),
-        service: 'Stream Live Broadcast'
-    });
+    res.json({ status: 'ok' });
 });
 
-// 6. تقديم الصفحة الرئيسية
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// 7. تشغيل الخادم
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ الخادم يعمل على المنفذ: ${PORT}`);
-    console.log(`🔗 الرابط: http://localhost:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
