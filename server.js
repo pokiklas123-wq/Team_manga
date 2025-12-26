@@ -1,19 +1,16 @@
 const express = require('express');
-
-const serverClient = StreamChat.getInstance(STREAM_API_KEY, STREAM_API_SECRET);
-
-//const { StreamClient } = require('@stream-io/node-sdk');
+const { StreamChat } = require('stream-chat'); // الحزمة الجديدة
 const cors = require('cors');
 const path = require('path');
 
 const app = express();
 
-// 1. إعدادات Stream API (استخدم مفاتيحك هنا)
+// 1. إعدادات Stream API (استخدم مفاتيحك هنا أو المتغيرات البيئية)
 const STREAM_API_KEY = process.env.STREAM_API_KEY || 'r9vxmmx42jmz';
 const STREAM_API_SECRET = process.env.STREAM_API_SECRET || 'zzf2rqubuyswebanq2xncfef8uu24b2m7ftq7k85a5szgegvdgmre7n4kngfrjzc';
 
-// 2. تهيئة عميل Stream
-const serverClient = new StreamClient(STREAM_API_KEY, STREAM_API_SECRET);
+// 2. تهيئة عميل Stream باستخدام الحزمة الجديدة
+const serverClient = StreamChat.getInstance(STREAM_API_KEY, STREAM_API_SECRET);
 
 // 3. إعداد Middleware
 app.use(cors());
@@ -32,6 +29,7 @@ app.get('/api/token', (req, res) => {
             });
         }
         
+        // إنشاء التوكن باستخدام الحزمة الجديدة
         const token = serverClient.createToken(user_id);
         
         res.json({
