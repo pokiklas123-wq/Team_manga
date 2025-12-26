@@ -1,5 +1,6 @@
 const express = require('express');
-const { StreamChat } = require('stream-chat'); // الحزمة الجديدة
+const { StreamClient } = require('@stream-io/node-sdk');
+//const { StreamChat } = require('stream-chat'); // الحزمة الجديدة
 const cors = require('cors');
 const path = require('path');
 
