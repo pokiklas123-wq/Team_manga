@@ -49,8 +49,8 @@
                 <h2>📹 الفيديو الخاص بك (المذيع)</h2>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="controls">
-                    <button id="startBtn" onclick="startBroadcast()">▶ بدء البث المباشر</button>
-                    <button id="stopBtn" onclick="stopBroadcast()" disabled>⏹ إيقاف البث</button>
+                    <button id="startBtn">▶ بدء البث المباشر</button>
+                    <button id="stopBtn" disabled>⏹ إيقاف البث</button>
                 </div>
             </section>
 
@@ -381,9 +381,10 @@
             }
         }
 
-        // جعل الدوال متاحة عالمياً
-        window.startBroadcast = startBroadcast;
-        window.stopBroadcast = stopBroadcast;
+        // ==================== ربط الأزرار بالأحداث ====================
+        // هذا هو التعديل الرئيسي: ربط الأزرار بالدوال
+        document.getElementById('startBtn').addEventListener('click', startBroadcast);
+        document.getElementById('stopBtn').addEventListener('click', stopBroadcast);
 
         // ==================== التهيئة عند تحميل الصفحة ====================
         document.addEventListener('DOMContentLoaded', async () => {
